@@ -3880,6 +3880,39 @@ Defaults to B<false>.
 
 =back
 
+=head2 Plugin C<infiniband>
+
+The C<infiniband> plugin collects information about IB ports. Metrics are
+gathered from C</sys/class/infiniband/DEVICE/port/PORTNUM/*>, and I<Port> names
+are formatted like C<DEVICE:PORTNUM> (see examples below).
+
+B<Options:>
+
+=over 4
+
+=item B<Port> I<Port>
+
+Select the port I<Port>. Whether it is collected or ignored depends on the
+B<IgnoreSelected> setting, see below. As with other plugins that use the
+daemon's ignorelist functionality, a string that starts and ends with a slash
+is interpreted as a regular expression. Examples:
+
+  Port "mlx5_0:1"
+  Port "/mthca0:[0-9]/"
+
+See F</"IGNORELISTS"> for details.
+
+=item B<IgnoreSelected> I<true>|I<false>
+
+Sets whether selected ports are ignored or if all other ports are ignored. The
+behavior (hopefully) is intuitive: If no B<Port> option is configured, all
+ports are collected. If at least one B<Port> option is given and
+B<IgnoreSelected> is not given or set to I<false>, B<only> matching ports will
+be collected. If B<IgnoreSelected> is set to B<true>, all ports are collected
+B<except> the ones matched.
+
+=back
+
 =head2 Plugin C<intel_pmu>
 
 The I<intel_pmu> plugin collects performance counters data on Intel CPUs using
@@ -5485,7 +5518,7 @@ C<Bytes_{received,sent}>, C<Com_*>, C<Handler_*>, C<Qcache_*> and C<Threads_*>
 return values. Please refer to the B<MySQL reference manual>, I<5.1.6. Server
 Status Variables> for an explanation of these values.
 
-Optionally, master and slave statistics may be collected in a MySQL
+Optionally, primary and replica statistics may be collected in a MySQL
 replication setup. In that case, information about the synchronization state
 of the nodes are collected by evaluating the C<Position> return value of the
 C<SHOW MASTER STATUS> command and the C<Seconds_Behind_Master>,
@@ -5587,7 +5620,7 @@ Disabled by default.
 
 =item B<SlaveStats> I<true|false>
 
-Enable the collection of master / slave statistics in a replication setup. In
+Enable the collection of primary / replica statistics in a replication setup. In
 order to be able to get access to these statistics, the user needs special
 privileges. See the B<User> documentation above. Defaults to B<false>.
 
@@ -6198,6 +6231,21 @@ to get an idea of what awaits you:
 
 If I<Interface> is B<All>, all interfaces will be selected.
 
+It is possible to use regular expressions to match interface names, if the
+name is surrounded by I</.../> and collectd was compiled with support for
+regexps. This is useful if there's a need to collect (or ignore) data
+for a group of interfaces that are similarly named, without the need to
+explicitly list all of them (especially useful if the list is dynamic).
+Examples:
+
+ Interface "/^eth/"
+ Interface "/^ens[1-4]$|^enp[0-3]$/"
+ VerboseInterface "/^eno[0-9]+/"
+
+This will match all interfaces with names starting with I<eth>, all interfaces
+in range I<ens1 - ens4> and I<enp0 - enp3>, and for verbose metrics all
+interfaces with names starting with I<eno> followed by at least one digit.
+
 =item B<QDisc> I<Interface> [I<QDisc>]
 
 =item B<Class> I<Interface> [I<Class>]
@@ -6245,6 +6293,13 @@ selected at all, everything is collected. If some things are selected using the
 options described above, only these statistics are collected. If you set
 B<IgnoreSelected> to B<true>, this behavior is inverted, i.E<nbsp>e. the
 specified statistics will not be collected.
+
+=item B<CollectVFStats> B<true|false>
+
+Allow plugin to collect VF's statistics if there are Virtual Functions
+available for interfaces specified in B<Interface> or B<VerboseInterface>.
+All available stats are collected no matter if parent interface is set
+by B<Interface> or B<VerboseInterface>.
 
 =back
 
@@ -8837,7 +8892,9 @@ The C<smart> plugin collects SMART information from physical
 disks. Values collectd include temperature, power cycle count, poweron
 time and bad sectors. Also, all SMART attributes are collected along
 with the normalized current value, the worst value, the threshold and
-a human readable value.
+a human readable value. The plugin can also collect SMART attributes
+for NVMe disks (present in accordance with NVMe 1.4 spec) and Additional
+SMART Attributes from Intel® NVMe disks.
 
 Using the following two options you can ignore some disks or configure the
 collection only of specific disks.
@@ -8853,6 +8910,7 @@ is interpreted as a regular expression. Examples:
 
   Disk "sdd"
   Disk "/hda[34]/"
+  Disk "nvme0n1"
 
 See F</"IGNORELISTS"> for details.
 
@@ -10833,7 +10891,7 @@ The output format to use. Can be one of C<Graphite> or C<JSON>.
 =head2 Plugin C<write_tsdb>
 
 The C<write_tsdb> plugin writes data to I<OpenTSDB>, a scalable open-source
-time series database. The plugin connects to a I<TSD>, a masterless, no shared
+time series database. The plugin connects to a I<TSD>, a leaderless, no shared
 state daemon that ingests metrics and stores them in HBase. The plugin uses
 I<TCP> over the "line based" protocol with a default port 4242. The data will
 be sent in blocks of at most 1428 bytes to minimize the number of network
